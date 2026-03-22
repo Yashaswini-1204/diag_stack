@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/dem",
+                "${workspaceFolder}/dcm",
+                "${workspaceFolder}/platform",
+                "${workspaceFolder}/safety",
+                "${workspaceFolder}/transport/isotp",
+                "${workspaceFolder}/test/unity"
+            ],
+            "defines": ["PLATFORM_LINUX"],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c99",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

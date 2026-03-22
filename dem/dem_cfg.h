@@ -1,0 +1,18 @@
+#ifndef DEM_CFG_H
+#define DEM_CFG_H
+
+#define DEM_MAX_EVENTS               (64U)
+#define DEM_MAX_DTC_ENTRIES          (20U)
+#define DEM_FREEZE_FRAME_SIZE        (32U)
+#define DEM_EXT_DATA_SIZE            (16U)
+#define DEM_DEBOUNCE_FAIL_THRESHOLD  (10U)
+#define DEM_DEBOUNCE_PASS_THRESHOLD  (10U)
+#define DEM_DEBOUNCE_FAIL_TIME_MS    (100U)
+#define DEM_DEBOUNCE_PASS_TIME_MS    (100U)
+#define DEM_AGING_CYCLE_COUNT        (40U)
+#define DEM_NVM_PRIMARY_BLOCK_ID     (0x0001U)
+#define DEM_NVM_MIRROR_BLOCK_ID      (0x0002U)
+#define DEM_AUDIT_LOG_SIZE           (200U)
+#define DEM_MAIN_FUNCTION_PERIOD_MS  (10U)
+
+#endif

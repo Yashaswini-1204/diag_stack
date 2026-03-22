@@ -1,0 +1,3 @@
+bin/
+*.o
+/tmp/dem_nvm*.bin
