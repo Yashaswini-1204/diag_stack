@@ -1,23 +1,37 @@
-CC     = gcc
-CFLAGS = -std=c99 -Wall -Wextra -Werror -g \
-         -I./dem \
-         -I./dcm \
-         -I./platform \
-         -I./safety \
-         -I./transport/isotp \
-         -I./test/unity \
-         -DPLATFORM_LINUX
+CC      = gcc
+CFLAGS  = -std=c99 -Wall -Wextra -Werror -g \
+          -I./dem \
+          -I./dcm \
+          -I./dcm/iso14229 \
+          -I./platform \
+          -I./safety \
+          -I./transport/isotp \
+          -I./test/unity \
+          -DPLATFORM_LINUX
 
-UNITY  = test/unity/unity.c
-PLAT   = platform/platform_linux.c
+CC11    = gcc
+C11FLAGS = -std=c11 -Wall -Wextra -g \
+           -I./dem \
+           -I./dcm \
+           -I./dcm/iso14229 \
+           -I./platform \
+           -I./safety \
+           -I./transport/isotp \
+           -I./test/unity \
+           -DPLATFORM_LINUX
 
-DEM_CORE = dem/dem_core.c dem/dem_debounce.c
+UNITY   = test/unity/unity.c
+PLAT    = platform/platform_linux.c
 
+DEM_CORE    = dem/dem_core.c dem/dem_debounce.c
 DEM_STORAGE = dem/dem_dtc.c dem/dem_nvm.c
+DCM_SRC     = dcm/iso14229/iso14229.c dcm/dcm_callbacks.c dcm/dcm_main.c
 
-S1_SRC = $(DEM_CORE) $(PLAT) $(UNITY) test/test_dem_core.c
+S1_SRC = $(DEM_CORE) $(PLAT) $(UNITY) \
+         test/test_dem_core.c
 
-S2_SRC = $(DEM_CORE) $(DEM_STORAGE) $(PLAT) $(UNITY) test/test_dem_storage.c
+S2_SRC = $(DEM_CORE) $(DEM_STORAGE) $(PLAT) $(UNITY) \
+         test/test_dem_storage.c
 
 test_dem_core: $(S1_SRC)
 	$(CC) $(CFLAGS) $^ -o bin/$@ -lpthread
