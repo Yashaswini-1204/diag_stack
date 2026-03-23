@@ -11,13 +11,13 @@ CFLAGS = -std=c99 -Wall -Wextra -Werror -g \
 UNITY  = test/unity/unity.c
 PLAT   = platform/platform_linux.c
 
-S1_SRC = dem/dem_core.c dem/dem_debounce.c \
-         $(PLAT) $(UNITY) test/test_dem_core.c
+DEM_CORE = dem/dem_core.c dem/dem_debounce.c
 
-S2_SRC = dem/dem_core.c dem/dem_debounce.c \
-         dem/dem_dtc.c dem/dem_freezeframe.c \
-         dem/dem_extdata.c dem/dem_nvm.c \
-         $(PLAT) $(UNITY) test/test_dem_storage.c
+DEM_STORAGE = dem/dem_dtc.c dem/dem_nvm.c
+
+S1_SRC = $(DEM_CORE) $(PLAT) $(UNITY) test/test_dem_core.c
+
+S2_SRC = $(DEM_CORE) $(DEM_STORAGE) $(PLAT) $(UNITY) test/test_dem_storage.c
 
 test_dem_core: $(S1_SRC)
 	$(CC) $(CFLAGS) $^ -o bin/$@ -lpthread
@@ -35,7 +35,7 @@ test_dem_storage: $(S2_SRC)
 
 .PHONY: all clean lint
 
-all: test_dem_core
+all: test_dem_core test_dem_storage
 
 clean:
 	rm -f bin/*
