@@ -60,3 +60,19 @@ lint:
 	         --suppress=missingIncludeSystem \
 	         -I./dem -I./platform \
 	         dem/ platform/ 2>&1
+
+S4_SRC = dem/dem_core.c dem/dem_debounce.c \
+         dem/dem_dtc.c dem/dem_nvm.c \
+         dcm/iso14229/iso14229.c \
+         dcm/dcm_callbacks.c \
+         platform/platform_linux.c \
+         test/unity/unity.c \
+         test/test_dcm_uds.c
+
+test_dcm_uds: $(S4_SRC)
+	$(CC11) $(C11FLAGS) -DUDS_TP_ISOTP_MOCK $^ \
+	    -o bin/$@ -lpthread
+	@echo ""
+	@echo ">>> Running DCM UDS loopback tests..."
+	@echo ""
+	./bin/$@

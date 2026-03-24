@@ -1,3 +1,7 @@
+/* dcm_callbacks.c
+ * Wires iso14229 UDS server events to DEM.
+ * Return UDS_PositiveResponse (0) on success, UDS_NRC_* on failure.
+ */
 #include "dcm_callbacks.h"
 #include "../dem/dem_dtc.h"
 #include "../dem/dem_nvm.h"
@@ -11,157 +15,179 @@
 
 static uint8_t s_seed[SEED_LEN] = {0x12U, 0x34U, 0x56U, 0x78U};
 
+/* ── 0x14 ClearDiagnosticInformation ───────────────────────────── */
 static UDSErr_t Handle_ClearDTC(UDSCDIArgs_t *args)
 {
     Std_ReturnType result;
     uint32_t       groupOfDTC;
 
-    if (args == NULL) { return UDS_ERR_INVALID_ARG; }
+    if (args == NULL) { return UDS_NRC_GeneralReject; }
 
     groupOfDTC = args->groupOfDTC & 0x00FFFFFFU;
 
-    if (groupOfDTC == 0x00FFFFFFU)
-    {
-        result = Dem_Dtc_Clear((uint32_t)DEM_DTC_CLEAR_ALL);
-    }
-    else
-    {
-        result = Dem_Dtc_Clear(groupOfDTC);
-    }
+    result = (groupOfDTC == 0x00FFFFFFU)
+             ? Dem_Dtc_Clear((uint32_t)DEM_DTC_CLEAR_ALL)
+             : Dem_Dtc_Clear(groupOfDTC);
 
     if (result == E_OK)
     {
         (void)Dem_Nvm_Save();
-        return UDS_OK;
+        return UDS_PositiveResponse;
     }
-    return (UDSErr_t)UDS_NRC_RequestOutOfRange;
+    return UDS_NRC_RequestOutOfRange;
 }
 
+/* ── 0x19 ReadDTCInformation ────────────────────────────────────── */
 static UDSErr_t Handle_ReadDTC(UDSServer_t *srv, UDSRDTCIArgs_t *args)
 {
     uint8_t  idx;
     uint32_t dtcNumber  = 0U;
     uint8_t  statusByte = 0U;
     uint8_t  buf[4U];
+    uint8_t  mask;
+    uint8_t  count      = 0U;
 
-    if ((srv == NULL) || (args == NULL)) { return UDS_ERR_INVALID_ARG; }
+    if ((srv == NULL) || (args == NULL)) { return UDS_NRC_GeneralReject; }
 
     switch (args->type)
     {
-        case 0x02U:
+        /* 0x01 reportNumberOfDTCByStatusMask
+         * Response: base(2) + availMask(1) + dtcCountHighByte(1)
+         *           + dtcCountLowByte(1) + dtcFormatId(1) = base+4
+         * iso14229 checks: send_len == base + 4                    */
+        case 0x01U:
+        {
+            uint8_t resp[4U];
+            mask = args->subFuncArgs.numOfDTCByStatusMaskArgs.mask;
             for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
             {
                 if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
                 {
-                    if ((statusByte &
-                         args->subFuncArgs.dtcStatusByMaskArgs.mask) != 0U)
+                    if ((statusByte & mask) != 0U) { count++; }
+                }
+            }
+            /* availableMask, formatId(UDS=0x01), countHigh, countLow */
+            resp[0U] = mask;
+            resp[1U] = 0x01U; /* DTCFormatIdentifier: ISO15031-6DTCFormat */
+            resp[2U] = 0x00U; /* count high byte */
+            resp[3U] = count; /* count low byte  */
+            if (args->copy(srv, resp, 4U) != UDS_PositiveResponse)
+            {
+                return UDS_NRC_ResponseTooLong;
+            }
+            return UDS_PositiveResponse;
+        }
+
+        /* 0x02 reportDTCByStatusMask
+         * Response: base(2) + availMask(1) [+ (dtc3 + status1)*N]
+         * iso14229 checks: send_len >= base+1
+         *   AND (send_len - (base+1)) % 4 == 0                     */
+        case 0x02U:
+        {
+            uint8_t availMask[1U];
+            mask = args->subFuncArgs.dtcStatusByMaskArgs.mask;
+
+            /* Always write the availableDTCStatusMask byte first */
+            availMask[0U] = 0xFFU; /* all status bits supported */
+            if (args->copy(srv, availMask, 1U) != UDS_PositiveResponse)
+            {
+                return UDS_NRC_ResponseTooLong;
+            }
+
+            /* Then write each matching DTC (3 bytes) + status (1 byte) */
+            for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
+            {
+                if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
+                {
+                    if ((statusByte & mask) != 0U)
                     {
                         buf[0U] = (uint8_t)((dtcNumber >> 16U) & 0xFFU);
                         buf[1U] = (uint8_t)((dtcNumber >>  8U) & 0xFFU);
                         buf[2U] = (uint8_t)( dtcNumber         & 0xFFU);
                         buf[3U] = statusByte;
-                        if (args->copy(srv, buf, 4U) != 4U)
+                        if (args->copy(srv, buf, 4U) != UDS_PositiveResponse)
                         {
-                            return (UDSErr_t)UDS_NRC_ResponseTooLong;
+                            return UDS_NRC_ResponseTooLong;
                         }
                     }
                 }
             }
-            return UDS_OK;
-
-        case 0x01U:
-        {
-            uint8_t count = 0U;
-            for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
-            {
-                if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
-                {
-                    if ((statusByte &
-                         args->subFuncArgs.numOfDTCByStatusMaskArgs.mask) != 0U)
-                    {
-                        count++;
-                    }
-                }
-            }
-            buf[0U] = count;
-            if (args->copy(srv, buf, 1U) != 1U)
-            {
-                return (UDSErr_t)UDS_NRC_ResponseTooLong;
-            }
-            return UDS_OK;
+            return UDS_PositiveResponse;
         }
 
         default:
-            return (UDSErr_t)UDS_NRC_SubFunctionNotSupported;
+            return UDS_NRC_SubFunctionNotSupported;
     }
 }
 
+/* ── 0x22 ReadDataByIdentifier ──────────────────────────────────── */
 static UDSErr_t Handle_RDBI(UDSServer_t *srv, UDSRDBIArgs_t *args)
 {
-    uint8_t buf[8U];
+    /* Static DID table */
+    static const uint8_t vin[8U]  = {'T','E','S','T','V','I','N','1'};
+    static const uint8_t sess[1U] = {0x01U}; /* DefaultSession */
 
-    if ((srv == NULL) || (args == NULL)) { return UDS_ERR_INVALID_ARG; }
+    if ((srv == NULL) || (args == NULL)) { return UDS_NRC_GeneralReject; }
 
     switch (args->dataId)
     {
-        case 0xF186U:
-            buf[0U] = 0x01U;
-            if (args->copy(srv, buf, 1U) != 1U)
+        case 0xF186U: /* ActiveDiagnosticSession */
+            if (args->copy(srv, sess, 1U) != UDS_PositiveResponse)
             {
-                return (UDSErr_t)UDS_NRC_ResponseTooLong;
+                return UDS_NRC_ResponseTooLong;
             }
-            return UDS_OK;
+            return UDS_PositiveResponse;
 
-        case 0xF190U:
-            (void)memset(buf, 0x00U, sizeof(buf));
-            buf[0U] = 'T'; buf[1U] = 'E'; buf[2U] = 'S';
-            buf[3U] = 'T'; buf[4U] = 'V'; buf[5U] = 'I';
-            buf[6U] = 'N'; buf[7U] = '1';
-            if (args->copy(srv, buf, 8U) != 8U)
+        case 0xF190U: /* VIN */
+            if (args->copy(srv, vin, 8U) != UDS_PositiveResponse)
             {
-                return (UDSErr_t)UDS_NRC_ResponseTooLong;
+                return UDS_NRC_ResponseTooLong;
             }
-            return UDS_OK;
+            return UDS_PositiveResponse;
 
         default:
-            return (UDSErr_t)UDS_NRC_RequestOutOfRange;
+            return UDS_NRC_RequestOutOfRange;
     }
 }
 
+/* ── 0x27 SecurityAccess — RequestSeed ─────────────────────────── */
 static UDSErr_t Handle_SecAccessSeed(UDSServer_t *srv,
                                       UDSSecAccessRequestSeedArgs_t *args)
 {
-    if ((srv == NULL) || (args == NULL)) { return UDS_ERR_INVALID_ARG; }
-    if (args->copySeed(srv, s_seed, (uint16_t)SEED_LEN) != SEED_LEN)
+    if ((srv == NULL) || (args == NULL)) { return UDS_NRC_GeneralReject; }
+    if (args->copySeed(srv, s_seed, (uint16_t)SEED_LEN) != UDS_PositiveResponse)
     {
-        return (UDSErr_t)UDS_NRC_ResponseTooLong;
+        return UDS_NRC_ResponseTooLong;
     }
-    return UDS_OK;
+    return UDS_PositiveResponse;
 }
 
+/* ── 0x27 SecurityAccess — ValidateKey ─────────────────────────── */
 static UDSErr_t Handle_SecAccessKey(UDSSecAccessValidateKeyArgs_t *args)
 {
-    uint32_t receivedKey;
-    uint32_t expectedKey;
+    uint32_t received;
+    uint32_t expected;
 
-    if (args == NULL)                  { return UDS_ERR_INVALID_ARG; }
-    if (args->len < (uint16_t)KEY_LEN) { return UDS_ERR_INVALID_ARG; }
+    if (args == NULL)                  { return UDS_NRC_GeneralReject; }
+    if (args->len < (uint16_t)KEY_LEN) { return UDS_NRC_GeneralReject; }
 
-    receivedKey = ((uint32_t)args->key[0U] << 24U)
-                | ((uint32_t)args->key[1U] << 16U)
-                | ((uint32_t)args->key[2U] <<  8U)
-                | ((uint32_t)args->key[3U]);
+    received = ((uint32_t)args->key[0U] << 24U)
+             | ((uint32_t)args->key[1U] << 16U)
+             | ((uint32_t)args->key[2U] <<  8U)
+             | ((uint32_t)args->key[3U]);
 
-    expectedKey = (((uint32_t)s_seed[0U] << 24U)
-                 | ((uint32_t)s_seed[1U] << 16U)
-                 | ((uint32_t)s_seed[2U] <<  8U)
-                 | ((uint32_t)s_seed[3U]))
-                ^ SECURITY_KEY_XOR;
+    expected = (((uint32_t)s_seed[0U] << 24U)
+              | ((uint32_t)s_seed[1U] << 16U)
+              | ((uint32_t)s_seed[2U] <<  8U)
+              | ((uint32_t)s_seed[3U]))
+             ^ SECURITY_KEY_XOR;
 
-    if (receivedKey == expectedKey) { return UDS_OK; }
-    return (UDSErr_t)UDS_NRC_InvalidKey;
+    return (received == expected)
+           ? UDS_PositiveResponse
+           : (UDSErr_t)UDS_NRC_InvalidKey;
 }
 
+/* ── Master callback ────────────────────────────────────────────── */
 UDSErr_t DCM_ServerCallback(UDSServer_t *srv,
                              UDSEvent_t   event,
                              void        *arg)
@@ -187,9 +213,10 @@ UDSErr_t DCM_ServerCallback(UDSServer_t *srv,
 
         case UDS_EVT_SessionTimeout:
             (void)Dem_Nvm_Save();
-            return UDS_OK;
+            return UDS_PositiveResponse;
 
+        /* Unhandled events — return positive so server sends a response */
         default:
-            return UDS_OK;
+            return UDS_PositiveResponse;
     }
 }
