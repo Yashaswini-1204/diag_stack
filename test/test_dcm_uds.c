@@ -8,6 +8,7 @@
 #include "../platform/platform_api.h"
 #include <string.h>
 #include <stdio.h>
+#define _POSIX_C_SOURCE 200809L
 #include <unistd.h>   /* usleep */
 
 #define SERVER_ADDR  (0x7E8U)
