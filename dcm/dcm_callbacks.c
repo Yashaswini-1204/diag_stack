@@ -51,7 +51,7 @@ static UDSErr_t Handle_ReadDTC(UDSServer_t *srv, UDSRDTCIArgs_t *args)
     uint8_t  idx;
     uint32_t dtcNumber  = 0U;
     uint8_t  statusByte = 0U;
-    uint8_t  buf[4U];
+    uint8_t  buf[DEM_FREEZE_FRAME_SIZE + 8U]; /* large enough for all subfuncs */
     uint8_t  mask;
     uint8_t  count      = 0U;
 
@@ -59,6 +59,7 @@ static UDSErr_t Handle_ReadDTC(UDSServer_t *srv, UDSRDTCIArgs_t *args)
 
     switch (args->type)
     {
+        /* 0x01 reportNumberOfDTCByStatusMask */
         case 0x01U:
         {
             uint8_t resp[4U];
@@ -71,7 +72,7 @@ static UDSErr_t Handle_ReadDTC(UDSServer_t *srv, UDSRDTCIArgs_t *args)
                 }
             }
             resp[0U] = mask;
-            resp[1U] = 0x01U;
+            resp[1U] = 0x01U; /* UDS DTC format */
             resp[2U] = 0x00U;
             resp[3U] = count;
             if (args->copy(srv, resp, 4U) != UDS_PositiveResponse)
@@ -81,6 +82,7 @@ static UDSErr_t Handle_ReadDTC(UDSServer_t *srv, UDSRDTCIArgs_t *args)
             return UDS_PositiveResponse;
         }
 
+        /* 0x02 reportDTCByStatusMask */
         case 0x02U:
         {
             uint8_t availMask[1U];
@@ -110,12 +112,142 @@ static UDSErr_t Handle_ReadDTC(UDSServer_t *srv, UDSRDTCIArgs_t *args)
             return UDS_PositiveResponse;
         }
 
+        /* 0x03 reportDTCSnapshotIdentification
+         * Response per DTC: 3 bytes DTC + 1 byte snapshotRecordNum
+         * Length check: (send_len - base) % 4 == 0                */
+        case 0x03U:
+        {
+            for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
+            {
+                if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
+                {
+                    if ((statusByte & DEM_UDS_STATUS_CDTC) != 0U)
+                    {
+                        buf[0U] = (uint8_t)((dtcNumber >> 16U) & 0xFFU);
+                        buf[1U] = (uint8_t)((dtcNumber >>  8U) & 0xFFU);
+                        buf[2U] = (uint8_t)( dtcNumber         & 0xFFU);
+                        buf[3U] = 0x01U; /* snapshotRecordNumber */
+                        if (args->copy(srv, buf, 4U) != UDS_PositiveResponse)
+                        {
+                            return UDS_NRC_ResponseTooLong;
+                        }
+                    }
+                }
+            }
+            return UDS_PositiveResponse;
+        }
+
+        /* 0x04 reportDTCSnapshotRecordByDTCNumber
+         * Response: 3 DTC + 1 status + 1 recordNum + FF bytes      */
+        case 0x04U:
+        {
+            uint32_t targetDtc;
+            uint8_t  found     = 0U;
+            uint8_t  ffBuf[DEM_FREEZE_FRAME_SIZE + 5U];
+
+            targetDtc = args->subFuncArgs.dtcSnapshotRecordbyDTCNumArgs.dtc
+                        & 0x00FFFFFFU;
+
+            for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
+            {
+                if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
+                {
+                    if ((dtcNumber & 0x00FFFFFFU) == targetDtc)
+                    {
+                        ffBuf[0U] = (uint8_t)((dtcNumber >> 16U) & 0xFFU);
+                        ffBuf[1U] = (uint8_t)((dtcNumber >>  8U) & 0xFFU);
+                        ffBuf[2U] = (uint8_t)( dtcNumber         & 0xFFU);
+                        ffBuf[3U] = statusByte;
+                        ffBuf[4U] = 0x01U; /* snapshotRecordNumber */
+                        /* freeze frame placeholder — zeroed */
+                        (void)memset(&ffBuf[5U], 0x00U,
+                                     (size_t)DEM_FREEZE_FRAME_SIZE);
+                        if (args->copy(srv, ffBuf,
+                                       (uint16_t)(5U + DEM_FREEZE_FRAME_SIZE))
+                            != UDS_PositiveResponse)
+                        {
+                            return UDS_NRC_ResponseTooLong;
+                        }
+                        found = 1U;
+                        break;
+                    }
+                }
+            }
+            if (found == 0U) { return UDS_NRC_RequestOutOfRange; }
+            return UDS_PositiveResponse;
+        }
+
+        /* 0x06 reportDTCExtDataRecordByDTCNumber
+         * Response: 3 DTC + 1 status + 1 extDataRecNum + 4 bytes   */
+        case 0x06U:
+        {
+            uint32_t targetDtc;
+            uint8_t  found    = 0U;
+            uint8_t  extBuf[9U]; /* 3+1+1+4 */
+
+            targetDtc = args->subFuncArgs.dtcExtDtaRecordByDTCNumArgs.dtc
+                        & 0x00FFFFFFU;
+
+            for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
+            {
+                if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
+                {
+                    if ((dtcNumber & 0x00FFFFFFU) == targetDtc)
+                    {
+                        extBuf[0U] = (uint8_t)((dtcNumber >> 16U) & 0xFFU);
+                        extBuf[1U] = (uint8_t)((dtcNumber >>  8U) & 0xFFU);
+                        extBuf[2U] = (uint8_t)( dtcNumber         & 0xFFU);
+                        extBuf[3U] = statusByte;
+                        extBuf[4U] = 0x01U; /* extDataRecordNumber */
+                        /* occurrence counter = 1 (big-endian uint32) */
+                        extBuf[5U] = 0x00U;
+                        extBuf[6U] = 0x00U;
+                        extBuf[7U] = 0x00U;
+                        extBuf[8U] = 0x01U;
+                        if (args->copy(srv, extBuf, 9U) != UDS_PositiveResponse)
+                        {
+                            return UDS_NRC_ResponseTooLong;
+                        }
+                        found = 1U;
+                        break;
+                    }
+                }
+            }
+            if (found == 0U) { return UDS_NRC_RequestOutOfRange; }
+            return UDS_PositiveResponse;
+        }
+
+        /* 0x09 / 0x0A reportSupportedDTC — all occupied DTCs */
+        case 0x09U:
+        case 0x0AU:
+        {
+            uint8_t availMask[1U];
+            availMask[0U] = 0xFFU;
+            if (args->copy(srv, availMask, 1U) != UDS_PositiveResponse)
+            {
+                return UDS_NRC_ResponseTooLong;
+            }
+            for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
+            {
+                if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
+                {
+                    buf[0U] = (uint8_t)((dtcNumber >> 16U) & 0xFFU);
+                    buf[1U] = (uint8_t)((dtcNumber >>  8U) & 0xFFU);
+                    buf[2U] = (uint8_t)( dtcNumber         & 0xFFU);
+                    buf[3U] = statusByte;
+                    if (args->copy(srv, buf, 4U) != UDS_PositiveResponse)
+                    {
+                        return UDS_NRC_ResponseTooLong;
+                    }
+                }
+            }
+            return UDS_PositiveResponse;
+        }
+
         default:
             return UDS_NRC_SubFunctionNotSupported;
     }
 }
-
-/* ── 0x22 ReadDataByIdentifier — uses DID table ─────────────────── */
 static UDSErr_t Handle_RDBI(UDSServer_t *srv, UDSRDBIArgs_t *args)
 {
     const DCM_DidEntry_t *entry;

@@ -75,3 +75,14 @@ lint:
 	         --suppress=missingIncludeSystem \
 	         -I./dem -I./platform -I./dcm \
 	         dem/ platform/ dcm/ 2>&1
+
+S5_SRC = dcm/dcm_did_table.c \
+         $(UNITY) \
+         test/test_dcm_did.c
+
+test_dcm_did: $(S5_SRC)
+	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
+	@echo ""
+	@echo ">>> Running DID table tests..."
+	@echo ""
+	./bin/$@
