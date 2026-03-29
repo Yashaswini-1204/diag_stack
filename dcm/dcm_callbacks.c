@@ -1,5 +1,6 @@
 #include "dcm_callbacks.h"
 #include "dcm_did_table.h"
+#include "dcm_routine_table.h"
 #include "../dem/dem_dtc.h"
 #include "../dem/dem_nvm.h"
 #include "../dem/dem_types.h"
@@ -338,6 +339,40 @@ static UDSErr_t Handle_SecAccessKey(UDSSecAccessValidateKeyArgs_t *args)
     }
     return (UDSErr_t)UDS_NRC_InvalidKey;
 }
+static UDSErr_t Handle_RoutineControl(UDSServer_t *srv, UDSRoutineCtrlArgs_t *args)
+{
+    DCM_RoutineEntry_t *entry;
+    uint8_t             outBuf[32U];
+    uint16_t            outLen = 0U;
+    Std_ReturnType      result;
+
+    if (args == NULL) { return UDS_NRC_GeneralReject; }
+
+    entry = DCM_Routine_Find(args->id);
+    if (entry == NULL) { return UDS_NRC_RequestOutOfRange; }
+
+    if (DCM_Routine_CheckAccess(entry, s_currentSession,
+                                 s_currentSecurityLevel) != E_OK)
+    {
+        return UDS_NRC_SecurityAccessDenied;
+    }
+
+    result = DCM_Routine_Execute(entry, args->ctrlType,
+                                  args->optionRecord,
+                                  args->len,
+                                  outBuf, &outLen);
+    if (result != E_OK) { return UDS_NRC_GeneralReject; }
+
+    if ((outLen > 0U) && (args->copyStatusRecord != NULL))
+    {
+        if (args->copyStatusRecord(srv, outBuf, outLen) != UDS_PositiveResponse)
+        {
+            return UDS_NRC_ResponseTooLong;
+        }
+    }
+    return UDS_PositiveResponse;
+}
+
 
 /* ── Master callback ────────────────────────────────────────────── */
 UDSErr_t DCM_ServerCallback(UDSServer_t *srv,
@@ -354,6 +389,8 @@ UDSErr_t DCM_ServerCallback(UDSServer_t *srv,
             return Handle_ReadDTC(srv, (UDSRDTCIArgs_t *)arg);
         case UDS_EVT_ReadDataByIdent:
             return Handle_RDBI(srv, (UDSRDBIArgs_t *)arg);
+        case UDS_EVT_RoutineCtrl:
+            return Handle_RoutineControl(srv, (UDSRoutineCtrlArgs_t *)arg);
         case UDS_EVT_WriteDataByIdent:
             return Handle_WDBI((UDSWDBIArgs_t *)arg);
         case UDS_EVT_SecAccessRequestSeed:

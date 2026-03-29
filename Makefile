@@ -21,24 +21,32 @@ C11FLAGS = -std=c11 -Wall -Wextra -g \
            -I./test/unity \
            -DPLATFORM_LINUX
 
-UNITY    = test/unity/unity.c
-PLAT     = platform/platform_linux.c
+UNITY   = test/unity/unity.c
+PLAT    = platform/platform_linux.c
 
 DEM_CORE    = dem/dem_core.c dem/dem_debounce.c
 DEM_STORAGE = dem/dem_dtc.c dem/dem_nvm.c
 DCM_SRC     = dcm/iso14229/iso14229.c \
               dcm/dcm_did_table.c \
+              dcm/dcm_routine_table.c \
               dcm/dcm_callbacks.c
 
-S1_SRC = $(DEM_CORE) $(PLAT) $(UNITY) \
-         test/test_dem_core.c
+# Sprint 1 — DEM core tests
+S1_SRC = $(DEM_CORE) $(PLAT) $(UNITY) test/test_dem_core.c
 
-S2_SRC = $(DEM_CORE) $(DEM_STORAGE) $(PLAT) $(UNITY) \
-         test/test_dem_storage.c
+# Sprint 2 — DEM storage tests
+S2_SRC = $(DEM_CORE) $(DEM_STORAGE) $(PLAT) $(UNITY) test/test_dem_storage.c
 
-S4_SRC = $(DEM_CORE) $(DEM_STORAGE) $(DCM_SRC) \
-         $(PLAT) $(UNITY) \
+# Sprint 4 — DCM UDS loopback tests
+S4_SRC = $(DEM_CORE) $(DEM_STORAGE) $(DCM_SRC) $(PLAT) $(UNITY) \
          test/test_dcm_uds.c
+
+# Sprint 5 — DID table tests
+S5_SRC = dcm/dcm_did_table.c $(UNITY) test/test_dcm_did.c
+
+# Sprint 7 — Routine table tests (coming next)
+S7_SRC = dcm/dcm_did_table.c dcm/dcm_routine_table.c \
+         $(UNITY) test/test_dcm_routine.c
 
 test_dem_core: $(S1_SRC)
 	$(CC) $(CFLAGS) $^ -o bin/$@ -lpthread
@@ -55,16 +63,29 @@ test_dem_storage: $(S2_SRC)
 	./bin/$@
 
 test_dcm_uds: $(S4_SRC)
-	$(CC11) $(C11FLAGS) -DUDS_TP_ISOTP_MOCK $^ \
-	    -o bin/$@ -lpthread
+	$(CC11) $(C11FLAGS) -DUDS_TP_ISOTP_MOCK $^ -o bin/$@ -lpthread
 	@echo ""
 	@echo ">>> Running DCM UDS loopback tests..."
 	@echo ""
 	./bin/$@
 
+test_dcm_did: $(S5_SRC)
+	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
+	@echo ""
+	@echo ">>> Running DID table tests..."
+	@echo ""
+	./bin/$@
+
+test_dcm_routine: $(S7_SRC)
+	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
+	@echo ""
+	@echo ">>> Running routine table tests..."
+	@echo ""
+	./bin/$@
+
 .PHONY: all clean lint
 
-all: test_dem_core test_dem_storage test_dcm_uds
+all: test_dem_core test_dem_storage test_dcm_uds test_dcm_did
 
 clean:
 	rm -f bin/*
@@ -75,14 +96,3 @@ lint:
 	         --suppress=missingIncludeSystem \
 	         -I./dem -I./platform -I./dcm \
 	         dem/ platform/ dcm/ 2>&1
-
-S5_SRC = dcm/dcm_did_table.c \
-         $(UNITY) \
-         test/test_dcm_did.c
-
-test_dcm_did: $(S5_SRC)
-	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
-	@echo ""
-	@echo ">>> Running DID table tests..."
-	@echo ""
-	./bin/$@
