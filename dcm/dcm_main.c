@@ -1,5 +1,7 @@
+/* dcm_main.c — DCM init and poll entry point */
 #include "dcm_main.h"
 #include "dcm_callbacks.h"
+#include "../transport/transport_tcp.h"
 #include "../dem/dem_core.h"
 #include "../dem/dem_dtc.h"
 #include "../dem/dem_nvm.h"
@@ -7,32 +9,30 @@
 #include "../platform/platform_api.h"
 
 static UDSServer_t s_server;
+static UDSTp_t    *s_tp = NULL;
 
-void DCM_Init(void)
+Std_ReturnType DCM_Init(void)
 {
-    /* Init DEM layers */
-    Dem_Init();
-    Dem_Debounce_Init();
-    Dem_Dtc_Init();
-    Dem_Nvm_Init();
+    s_tp = TcpTp_Init();
+    if (s_tp == NULL) { return E_NOT_OK; }
 
-    /* Restore DTCs from NvM — ignore error on first boot */
-    (void)Dem_Nvm_Load();
+    UDSServerInit(&s_server);
+    s_server.tp         = s_tp;
+    s_server.fn         = DCM_ServerCallback;
+    s_server.p2_ms      = 50U;
+    s_server.p2_star_ms = 2000U;
+    s_server.s3_ms      = 5000U;
+    s_server.p2_timer   = UDSMillis() + s_server.p2_ms;
 
-    /* Init UDS server */
-    s_server.fn = DCM_ServerCallback;
-    (void)UDSServerInit(&s_server);
+    return E_OK;
 }
 
 void DCM_MainFunction(void)
 {
-    /* Poll UDS server — handles session timers, responses */
     UDSServerPoll(&s_server);
+}
 
-    /* Poll DEM */
-    Dem_MainFunction();
-    Dem_Debounce_MainFunction(Platform_GetTick_ms());
-
-    /* Service watchdog */
-    Platform_WdgTrigger();
+void DCM_Deinit(void)
+{
+    TcpTp_Deinit();
 }
