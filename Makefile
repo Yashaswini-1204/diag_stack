@@ -24,7 +24,7 @@ C11FLAGS = -std=c11 -Wall -Wextra -g \
 UNITY   = test/unity/unity.c
 PLAT    = platform/platform_linux.c
 
-DEM_CORE    = dem/dem_core.c dem/dem_debounce.c
+DEM_CORE    = dem/dem_core.c dem/dem_debounce.c dem/dem_aging.c dem/dem_dtc.c
 DEM_STORAGE = dem/dem_dtc.c dem/dem_nvm.c
 DCM_SRC     = dcm/iso14229/iso14229.c \
               dcm/dcm_did_table.c \

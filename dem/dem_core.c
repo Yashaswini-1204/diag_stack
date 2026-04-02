@@ -1,3 +1,4 @@
+#include "dem_aging.h"
 #include "dem_core.h"
 #include "dem_types.h"
 #include "dem_cfg.h"
@@ -147,6 +148,7 @@ void Dem_OperationCycleEnd(void)
             Platform_ExitCritical();
         }
     }
+    Dem_Aging_OperationCycleEnd();
 }
 
 void Dem_MainFunction(void)
@@ -181,14 +183,5 @@ void Dem_Aging_ClearHealingBits(Dem_EventIdType eventId)
     Platform_EnterCritical();
     Dem_EventTable[eventId].udsStatusByte &=
         ~((uint8_t)(DEM_UDS_STATUS_TNCSLC | DEM_UDS_STATUS_WIR));
-    Platform_ExitCritical();
-}
-
-void Dem_Aging_ClearHealingBits(Dem_EventIdType eventId)
-{
-    if (eventId >= (Dem_EventIdType)DEM_MAX_EVENTS) { return; }
-    Platform_EnterCritical();
-    Dem_EventTable[eventId].udsStatusByte &=
-        (uint8_t)(~(DEM_UDS_STATUS_TNCSLC | DEM_UDS_STATUS_WIR));
     Platform_ExitCritical();
 }
