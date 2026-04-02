@@ -1,6 +1,4 @@
 #include "dem_aging.h"
-#include "dem_aging.h"
-#include "dem_aging.h"
 #include "dem_dtc.h"
 #include "dem_core.h"
 #include "dem_cfg.h"
@@ -40,6 +38,7 @@ void Dem_Aging_ReportEvent(Dem_EventIdType eventId,
              status == DEM_EVENT_STATUS_PREPASSED)
     {
         s_aging[eventId].passedThisCycle = 1U;
+        s_aging[eventId].failedThisCycle  = 0U;
     }
 }
 

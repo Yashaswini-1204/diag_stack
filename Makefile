@@ -96,3 +96,15 @@ lint:
 	         --suppress=missingIncludeSystem \
 	         -I./dem -I./platform -I./dcm \
 	         dem/ platform/ dcm/ 2>&1
+
+S_AGING = dem/dem_core.c dem/dem_debounce.c dem/dem_dtc.c \
+          dem/dem_nvm.c dem/dem_aging.c \
+          platform/platform_linux.c \
+          test/unity/unity.c test/test_dem_aging.c
+
+test_dem_aging: $(S_AGING)
+	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
+	@echo ""
+	@echo ">>> Running aging+healing tests..."
+	@echo ""
+	./bin/$@
