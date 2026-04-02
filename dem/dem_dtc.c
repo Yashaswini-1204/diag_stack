@@ -214,16 +214,15 @@ void Dem_Dtc_AgeOut(Dem_EventIdType eventId)
     uint32_t dtcNumber  = 0U;
     uint8_t  statusByte = 0U;
     (void)eventId;
-
     for (idx = 0U; idx < (uint8_t)DEM_MAX_DTC_ENTRIES; idx++)
     {
         if (Dem_Dtc_GetByIndex(idx, &dtcNumber, &statusByte) == E_OK)
         {
-            statusByte &= ~(DEM_UDS_STATUS_CDTC  |
-                            DEM_UDS_STATUS_PDTC   |
-                            DEM_UDS_STATUS_TF     |
-                            DEM_UDS_STATUS_TFTOC  |
-                            DEM_UDS_STATUS_TFSLC);
+            statusByte &= (uint8_t)(~(DEM_UDS_STATUS_CDTC |
+                                      DEM_UDS_STATUS_PDTC  |
+                                      DEM_UDS_STATUS_TF    |
+                                      DEM_UDS_STATUS_TFTOC |
+                                      DEM_UDS_STATUS_TFSLC));
             if ((statusByte & 0x2FU) == 0U)
                 Dem_Dtc_Clear(dtcNumber);
         }

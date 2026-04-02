@@ -101,6 +101,7 @@ Std_ReturnType Dem_ReportErrorStatus(Dem_EventIdType eventId,
 
     entry->udsStatusByte = newStatus;
     Platform_ExitCritical();
+    Dem_Aging_ReportEvent(eventId, eventStatus);
     return E_OK;
 }
 
