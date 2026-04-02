@@ -173,3 +173,22 @@ void Dem_MainFunction(void)
     }
     Platform_WdgTrigger();
 }
+
+/* Called by dem_aging.c when healing threshold reached */
+void Dem_Aging_ClearHealingBits(Dem_EventIdType eventId)
+{
+    if (eventId >= (Dem_EventIdType)DEM_MAX_EVENTS) { return; }
+    Platform_EnterCritical();
+    Dem_EventTable[eventId].udsStatusByte &=
+        ~((uint8_t)(DEM_UDS_STATUS_TNCSLC | DEM_UDS_STATUS_WIR));
+    Platform_ExitCritical();
+}
+
+void Dem_Aging_ClearHealingBits(Dem_EventIdType eventId)
+{
+    if (eventId >= (Dem_EventIdType)DEM_MAX_EVENTS) { return; }
+    Platform_EnterCritical();
+    Dem_EventTable[eventId].udsStatusByte &=
+        (uint8_t)(~(DEM_UDS_STATUS_TNCSLC | DEM_UDS_STATUS_WIR));
+    Platform_ExitCritical();
+}
