@@ -1,23 +1,23 @@
 CC      = gcc
 CFLAGS  = -std=c99 -Wall -Wextra -Werror -g \
-          -I./dem \
-          -I./dcm \
-          -I./dcm/iso14229 \
-          -I./platform \
+          -I./inc \
+          -I./inc \
+          -I./inc/iso14229 \
+          -I./inc \
           -I./safety \
-          -I./transport/isotp \
+          -I./inc/isotp \
           -I./test/unity \
           -DPLATFORM_LINUX
 
 CC11     = gcc
 C11FLAGS = -std=c11 -Wall -Wextra -g \
            -D_POSIX_C_SOURCE=200809L \
-           -I./dem \
-           -I./dcm \
-           -I./dcm/iso14229 \
-           -I./platform \
+           -I./inc \
+           -I./inc \
+           -I./inc/iso14229 \
+           -I./inc \
            -I./safety \
-           -I./transport/isotp \
+           -I./inc/isotp \
            -I./test/unity \
            -DPLATFORM_LINUX
 
@@ -70,14 +70,14 @@ test_dcm_uds: $(S4_SRC)
 	./bin/$@
 
 test_dcm_did: $(S5_SRC)
-	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
+	$(CC) $(CFLAGS) -I./inc $^ -o bin/$@ -lpthread
 	@echo ""
 	@echo ">>> Running DID table tests..."
 	@echo ""
 	./bin/$@
 
 test_dcm_routine: $(S7_SRC)
-	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
+	$(CC) $(CFLAGS) -I./inc $^ -o bin/$@ -lpthread
 	@echo ""
 	@echo ">>> Running routine table tests..."
 	@echo ""
@@ -94,7 +94,7 @@ clean:
 lint:
 	cppcheck --enable=all --std=c99 \
 	         --suppress=missingIncludeSystem \
-	         -I./dem -I./platform -I./dcm \
+	         -I./inc -I./inc -I./inc \
 	         dem/ platform/ dcm/ 2>&1
 
 S_AGING = dem/dem_core.c dem/dem_debounce.c dem/dem_dtc.c \
@@ -103,7 +103,7 @@ S_AGING = dem/dem_core.c dem/dem_debounce.c dem/dem_dtc.c \
           test/unity/unity.c test/test_dem_aging.c
 
 test_dem_aging: $(S_AGING)
-	$(CC) $(CFLAGS) -I./dem $^ -o bin/$@ -lpthread
+	$(CC) $(CFLAGS) -I./inc $^ -o bin/$@ -lpthread
 	@echo ""
 	@echo ">>> Running aging+healing tests..."
 	@echo ""
